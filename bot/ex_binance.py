@@ -24,8 +24,9 @@ class BinanceAdapter:
         opts = {
             "apiKey": cfg.exchange.api_key,
             "secret": cfg.exchange.api_secret,
-            "options": {"defaultType": "future"},  # 币安 U本位永续
+            "options": {"defaultType": "future", "adjustForTimeDifference": True},
             "enableRateLimit": True,
+            "timeout": 15000,  # 15秒请求超时, 防止单个请求挂死拖垮主循环
         }
         self.ex = ccxt.binance(opts)
         self.sim_orders = {}
@@ -48,7 +49,9 @@ class BinanceAdapter:
 
     def fmt_amount(self, btc_qty):
         self._load_market()
-        q = float(self.ex.amount_to_precision(self.perp, btc_qty))
+        # 先保底到最小下单量, 再规整精度. 否则 amount_to_precision 对低于最小量的输入会直接抛错.
+        qty = max(btc_qty, self._min_amount)
+        q = float(self.ex.amount_to_precision(self.perp, qty))
         return max(q, self._min_amount)
 
     def price(self):

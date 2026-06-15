@@ -21,9 +21,12 @@ grid:
   recenter_interval_hours: 168     # 每周重新锚定
   range_pct: 0.10                  # 网格范围 锚点±10% (BTC波动比XMR小, 范围收窄)
   step_pct: 0.008                  # 格距 0.8% (BTC波动小, 格距比XMR密)
-  usdt_per_grid: 50                # 每格名义价值USDT (BTC最小下单量0.001≈100U, 注意见下)
+  usdt_per_grid: 70                # BTC最小下单0.001≈62U, 设70保证够一格. 小币可调小
   active_levels_per_side: 5        # 每侧同时挂单数
   leverage: 3                      # 杠杆, 别超5
+
+auto_tune:
+  enabled: true                    # 每日0点自动重算波动率, 变化超30%自动调格距/范围
 
 funding_bias:
   enabled: true

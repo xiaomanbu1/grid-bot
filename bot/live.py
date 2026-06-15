@@ -363,9 +363,37 @@ class LiveRunner:
         if today != self.last_day:
             self.last_day = today
             self.engine.stats.realized_today_usdt = 0.0
+            # 每日自动调参: 重算波动率, 变化明显则调整格距/范围
+            if self.cfg.get("auto_tune", {}).get("enabled", False) if hasattr(self.cfg, "get") else False:
+                self._auto_tune()
         if time.time() - self.last_report > self.cfg.telegram.report_interval_hours * 3600:
             self.last_report = time.time()
             self.tg.send("📅 每日报告\n" + self.status_text())
+
+    def _auto_tune(self):
+        """每日重算当前币种波动率, 若格距建议值与当前值偏差超阈值则自动调整."""
+        try:
+            symbol = self.cfg.exchange.perp_symbol
+            rec = self.recommend_params(symbol)
+            cur_step = self.cfg.grid.step_pct
+            new_step = rec["step_pct"]
+            # 偏差超过 30% 才调, 避免小波动频繁折腾
+            change = abs(new_step - cur_step) / cur_step if cur_step else 1
+            if change < 0.30:
+                log.info(f"每日调参: 波动率 {rec['vol']*100:.1f}%, 格距变化 {change*100:.0f}% < 30%, 不调")
+                return
+            self.cfg["grid"]["step_pct"] = new_step
+            self.cfg["grid"]["range_pct"] = rec["range_pct"]
+            self._persist_config()
+            self.recenter_flag = True
+            msg = (f"🔧 每日自动调参\n{symbol} 日波动率 {rec['vol']*100:.1f}%\n"
+                   f"格距 {cur_step*100:.2f}% → {new_step*100:.2f}%\n"
+                   f"范围 → ±{rec['range_pct']*100:.0f}%\n已重新锚定")
+            log.warning(msg.replace("\n", " "))
+            self.tg.send(msg)
+        except Exception as e:
+            log.warning(f"每日调参失败: {e}")
+
 
     # ---------- 主循环 ----------
 
@@ -416,5 +444,9 @@ class LiveRunner:
                 break
             except Exception as e:
                 log.exception(f"主循环异常: {e}")
-                self.tg.send(f"❌ 主循环异常: {e}")
+                # 错误节流: 同类错误最多每5分钟通知一次, 避免刷屏卡住TG
+                now2 = time.time()
+                if now2 - getattr(self, "_last_err_notify", 0) > 300:
+                    self._last_err_notify = now2
+                    self.tg.send(f"❌ 主循环异常 (5分钟内不再重复提醒): {e}")
             time.sleep(self.cfg.mode.poll_interval_sec)

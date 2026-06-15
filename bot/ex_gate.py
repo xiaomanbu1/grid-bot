@@ -24,6 +24,7 @@ class GateAdapter:
             "secret": cfg.exchange.api_secret,
             "options": {"defaultType": "swap"},
             "enableRateLimit": True,
+            "timeout": 15000,  # 15秒请求超时, 防止单个请求挂死拖垮主循环
         }
         self.ex = ccxt.gate(opts)
         self.ex_spot = ccxt.gate({**opts, "options": {"defaultType": "spot"}})
