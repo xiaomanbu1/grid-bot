@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BTC 网格 · 控制台</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#16181d; --panel:#1e2128; --line:#2c3038;
+  --txt:#e8e6e1; --muted:#8b8f98;
+  --xmr:#f26822; --ok:#57c98f; --bad:#e5484d; --warn:#e8b339;
+  --mono:ui-monospace,'SF Mono','Cascadia Mono','JetBrains Mono',Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);
+  font:14px/1.5 -apple-system,'PingFang SC','Noto Sans SC','Microsoft YaHei',sans-serif;
+  padding:16px;max-width:1180px;margin:0 auto}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* 顶栏 */
+header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
+  border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:16px}
+header h1{font-size:16px;font-weight:600;letter-spacing:.04em}
+header h1 b{color:var(--xmr)}
+.badge{font:11px var(--mono);padding:2px 8px;border-radius:3px;letter-spacing:.08em}
+.badge.dry{background:#2a3a4a;color:#7db8e8}
+.badge.live{background:#173326;color:var(--ok)}
+.badge.killed{background:#3a1d1f;color:var(--bad)}
+.badge.paused{background:#3a3320;color:var(--warn)}
+#price{margin-left:auto;font:600 24px var(--mono)}
+#price small{font-size:12px;color:var(--muted);font-weight:400}
+#conn{font-size:11px;color:var(--muted)}
+
+/* 英雄区: 累计回购 */
+.hero{display:flex;align-items:flex-end;gap:32px;flex-wrap:wrap;
+  background:linear-gradient(135deg,#23170f 0%,var(--panel) 55%);
+  border:1px solid var(--line);border-radius:8px;padding:18px 22px;margin-bottom:14px}
+.hero .big{font:700 44px/1 var(--mono);color:var(--xmr)}
+.hero .big small{font-size:16px;color:var(--muted);font-weight:400}
+.hero .label{font-size:12px;color:var(--muted);margin-bottom:6px;letter-spacing:.06em}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:18px;flex:1;min-width:300px}
+.kpi .v{font:600 17px var(--mono)}
+.kpi .k{font-size:11px;color:var(--muted)}
+.pos{color:var(--ok)}.neg{color:var(--bad)}
+
+/* 主区 */
+.main{display:grid;grid-template-columns:240px 1fr;gap:14px;margin-bottom:14px}
+@media(max-width:760px){.main{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}
+.panel h2{font-size:12px;color:var(--muted);font-weight:500;letter-spacing:.08em;margin-bottom:10px}
+
+/* 网格梯子 (招牌) */
+#ladder{position:relative;height:480px;font-family:var(--mono);font-size:10px}
+.rung{position:absolute;left:64px;right:8px;height:0;border-top:1px solid var(--line)}
+.rung.holding{border-top:2px solid var(--xmr)}
+.rung.has-order{border-top-style:dashed;border-top-color:#4a4f5a}
+.rung .tag{position:absolute;left:-60px;top:-7px;color:var(--muted);width:54px;text-align:right}
+.rung.holding .tag{color:var(--xmr)}
+.rung .dot{position:absolute;right:-2px;top:-3px;width:5px;height:5px;border-radius:50%}
+.rung.short .dot{background:var(--bad)}
+.rung.long .dot{background:var(--ok)}
+.marker{position:absolute;left:0;right:0;height:0;z-index:2}
+.marker .lbl{position:absolute;right:0;top:-9px;font-size:10px;padding:1px 6px;border-radius:2px}
+#mk-price{border-top:2px solid var(--txt)}
+#mk-price .lbl{background:var(--txt);color:var(--bg);font-weight:700}
+#mk-anchor{border-top:1px dashed var(--xmr)}
+#mk-anchor .lbl{color:var(--xmr)}
+.side-pause{position:absolute;left:64px;right:8px;background:rgba(232,179,57,.07);
+  border:1px dashed rgba(232,179,57,.4);color:var(--warn);
+  display:flex;align-items:center;justify-content:center;font-size:11px;z-index:1}
+
+/* 图表/表格 */
+.charts{display:grid;grid-template-rows:1fr 1fr;gap:14px}
+.chart-box{position:relative;height:226px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{color:var(--muted);font-weight:500;text-align:right;padding:5px 8px;border-bottom:1px solid var(--line)}
+td{text-align:right;padding:5px 8px;border-bottom:1px solid #23262d;font-family:var(--mono)}
+th:first-child,td:first-child{text-align:left}
+tr:last-child td{border-bottom:none}
+
+/* 控制 */
+.readonly-note{display:flex;align-items:center;gap:8px;margin-bottom:14px;
+  padding:9px 16px;border-radius:6px;font-size:12px;color:var(--muted);
+  background:var(--panel);border:1px solid var(--line)}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+  background:var(--panel);border:1px solid var(--line);padding:10px 20px;
+  border-radius:6px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:9}
+#toast.show{opacity:1}
+
+/* 登录 */
+#login{position:fixed;inset:0;background:var(--bg);display:flex;
+  align-items:center;justify-content:center;z-index:10}
+#login .card{background:var(--panel);border:1px solid var(--line);
+  border-radius:8px;padding:28px;width:300px}
+#login input{width:100%;background:var(--bg);border:1px solid var(--line);
+  color:var(--txt);padding:9px 12px;border-radius:6px;margin:12px 0;font-family:var(--mono)}
+#login button{width:100%;background:var(--xmr);border:none;color:#fff;font-weight:600;
+  padding:9px 18px;border-radius:6px;font-size:13px;cursor:pointer}
+#login button:hover{opacity:.92}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<div id="login">
+  <div class="card">
+    <h1 style="font-size:15px">BTC 网格 · 控制台</h1>
+    <input id="tok" type="password" placeholder="访问令牌 (config.yaml → web.token)"
+           onkeydown="if(event.key==='Enter')doLogin()">
+    <button onclick="doLogin()">进入</button>
+    <p id="loginErr" style="color:var(--bad);font-size:12px;min-height:18px;margin-top:6px"></p>
+  </div>
+</div>
+
+<header>
+  <h1><b>BTC</b> 币本位网格</h1>
+  <span id="modeBadge" class="badge dry">…</span>
+  <span id="pauseBadge" class="badge paused" hidden>已暂停</span>
+  <span id="conn">连接中…</span>
+  <div id="price" class="num">— <small>USDT</small></div>
+</header>
+
+<div class="hero">
+  <div>
+    <div class="label">累计实现盈亏 · USDT</div>
+    <div class="big num" id="xmrBought">0.0000<small> BTC</small></div>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><div class="v num" id="kAnchor">—</div><div class="k">锚点 EMA30</div></div>
+    <div class="kpi"><div class="v num" id="kPnl">—</div><div class="k">实现盈亏 USDT</div></div>
+    <div class="kpi"><div class="v num" id="kToday">—</div><div class="k">今日盈亏</div></div>
+    <div class="kpi"><div class="v num" id="kTrips">—</div><div class="k">完成轮次</div></div>
+    <div class="kpi"><div class="v num" id="kNet">—</div><div class="k">净敞口 USDT</div></div>
+    <div class="kpi"><div class="v num" id="kFund">—</div><div class="k">资金费 /8h</div></div>
+    <div class="kpi"><div class="v num" id="kLiq">—</div><div class="k">强平距离</div></div>
+    <div class="kpi"><div class="v num" id="kPend">—</div><div class="k">待回购利润</div></div>
+  </div>
+</div>
+
+<div class="readonly-note">
+  👁 只读监控面板 · 操作请通过 Telegram 机器人 (/pause /resume /kill)
+</div>
+
+<div class="main">
+  <div class="panel">
+    <h2>网格梯子 · 实仓 <span style="color:var(--xmr)">▬</span> 挂单 <span style="color:#4a4f5a">▭</span></h2>
+    <div id="ladder"></div>
+  </div>
+  <div class="charts">
+    <div class="panel"><h2>累计实现盈亏 / 实现盈亏</h2><div class="chart-box"><canvas id="eqChart"></canvas></div></div>
+    <div class="panel"><h2>价格 vs 锚点</h2><div class="chart-box"><canvas id="pxChart"></canvas></div></div>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>最近成交</h2>
+  <table id="trades"><thead><tr>
+    <th>时间</th><th>方向</th><th>入场</th><th>止盈</th><th>数量</th><th>盈亏 U</th>
+  </tr></thead><tbody></tbody></table>
+</div>
+
+<div id="toast"></div>
+
+<script>
+let TOKEN = localStorage.getItem('xmrgrid_token') || '';
+const $ = id => document.getElementById(id);
+const fmt = (n,d=2) => n==null ? '—' : Number(n).toFixed(d);
+
+async function api(path, opts={}) {
+  const r = await fetch(path, {...opts, headers:{
+    'Content-Type':'application/json','X-Auth-Token':TOKEN, ...(opts.headers||{})}});
+  if (r.status === 401) { showLogin('令牌无效'); throw new Error('auth'); }
+  return r.json();
+}
+function showLogin(err){ $('login').style.display='flex'; $('loginErr').textContent=err||''; }
+async function doLogin(){
+  TOKEN = $('tok').value.trim();
+  try { await api('/api/status'); localStorage.setItem('xmrgrid_token',TOKEN);
+        $('login').style.display='none'; tick(); }
+  catch(e){ $('loginErr').textContent='令牌无效，请检查 config.yaml'; }
+}
+
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2200); }
+
+// ---------- 状态 ----------
+async function refreshStatus(){
+  const s = await api('/api/status');
+  $('conn').textContent = '● ' + new Date().toLocaleTimeString('zh-CN');
+  $('price').innerHTML = `${fmt(s.price)} <small>USDT</small>`;
+  const mb=$('modeBadge');
+  if(s.killed){ mb.className='badge killed'; mb.textContent='KILLED'; }
+  else if(s.mode==='dry_run'){ mb.className='badge dry'; mb.textContent='DRY-RUN'; }
+  else { mb.className='badge live'; mb.textContent='实盘'; }
+  $('pauseBadge').hidden = !s.manual_pause;
+  $('xmrBought').innerHTML = fmt(s.xmr_bought,4)+'<small> BTC</small>';
+  $('kAnchor').textContent = fmt(s.anchor);
+  const pnl=$('kPnl'); pnl.textContent=fmt(s.realized_pnl);
+  pnl.className='v num '+(s.realized_pnl>=0?'pos':'neg');
+  const td=$('kToday'); td.textContent=fmt(s.realized_today);
+  td.className='v num '+(s.realized_today>=0?'pos':'neg');
+  $('kTrips').textContent = s.round_trips;
+  $('kNet').textContent = fmt(s.net_pos_usdt,1);
+  $('kFund').textContent = (s.funding*100).toFixed(4)+'%';
+  const liq=$('kLiq');
+  liq.textContent = s.liq_dist_pct==null ? '—' : (s.liq_dist_pct*100).toFixed(1)+'%';
+  liq.className = 'v num ' + (s.liq_dist_pct!=null && s.liq_dist_pct<0.3 ? 'neg':'');
+  $('kPend').textContent = fmt(s.pending_recycle);
+}
+
+// ---------- 网格梯子 ----------
+async function refreshLadder(){
+  const g = await api('/api/grid');
+  const box = $('ladder'); box.innerHTML='';
+  if(!g.levels.length || !g.upper) return;
+  const top=g.upper*1.02, bot=g.lower*0.98;
+  const y = p => ((top-p)/(top-bot))*100;
+  for(const l of g.levels){
+    const d=document.createElement('div');
+    d.className=`rung ${l.side} ${l.state==='holding'?'holding':''} ${l.has_order&&l.state!=='holding'?'has-order':''}`;
+    d.style.top = y(l.entry)+'%';
+    d.innerHTML = `<span class="tag">${l.entry.toFixed(1)}</span><span class="dot"></span>`;
+    d.title = `${l.side==='short'?'空':'多'} 入场${l.entry.toFixed(2)} → 止盈${l.exit.toFixed(2)}`+
+              (l.qty?` 持仓${l.qty}`:'');
+    box.appendChild(d);
+  }
+  for(const side of ['short','long']){
+    if(g.paused[side]){
+      const z=document.createElement('div'); z.className='side-pause';
+      z.textContent = (side==='short'?'空头侧':'多头侧')+' 熔断暂停中';
+      if(side==='short'){ z.style.top='0'; z.style.height=y(g.anchor)+'%'; }
+      else { z.style.top=y(g.anchor)+'%'; z.style.bottom='0'; }
+      box.appendChild(z);
+    }
+  }
+  const mk=(id,p,txt)=>{ const m=document.createElement('div');
+    m.className='marker'; m.id=id; m.style.top=y(p)+'%';
+    m.innerHTML=`<span class="lbl">${txt}</span>`; box.appendChild(m); };
+  mk('mk-anchor', g.anchor, '锚 '+g.anchor.toFixed(1));
+  if(g.price>0 && g.price<top && g.price>bot) mk('mk-price', g.price, g.price.toFixed(2));
+}
+
+// ---------- 图表 ----------
+let eqChart, pxChart;
+Chart.defaults.color='#8b8f98'; Chart.defaults.borderColor='#2c3038';
+Chart.defaults.font.family="ui-monospace,Consolas,monospace"; Chart.defaults.font.size=10;
+function mkCharts(){
+  const common={responsive:true,maintainAspectRatio:false,animation:false,
+    interaction:{mode:'index',intersect:false},
+    elements:{point:{radius:0}},plugins:{legend:{labels:{boxWidth:10}}}};
+  eqChart=new Chart($('eqChart'),{type:'line',data:{labels:[],datasets:[
+    {label:'实现盈亏',data:[],borderColor:'#f26822',borderWidth:1.6,yAxisID:'y'},
+    {label:'实现盈亏 U',data:[],borderColor:'#57c98f',borderWidth:1.2,yAxisID:'y1'}]},
+    options:{...common,scales:{y:{position:'left'},y1:{position:'right',grid:{display:false}}}}});
+  pxChart=new Chart($('pxChart'),{type:'line',data:{labels:[],datasets:[
+    {label:'价格',data:[],borderColor:'#e8e6e1',borderWidth:1.4},
+    {label:'锚点',data:[],borderColor:'#f26822',borderDash:[5,4],borderWidth:1.2}]},
+    options:common});
+}
+async function refreshCharts(){
+  const rows = await api('/api/equity?hours=336');
+  const lab = rows.map(r=>new Date(r.ts*1000).toLocaleString('zh-CN',
+    {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}));
+  eqChart.data.labels=lab;
+  eqChart.data.datasets[0].data=rows.map(r=>r.xmr_bought);
+  eqChart.data.datasets[1].data=rows.map(r=>r.realized_pnl);
+  eqChart.update();
+  pxChart.data.labels=lab;
+  pxChart.data.datasets[0].data=rows.map(r=>r.price);
+  pxChart.data.datasets[1].data=rows.map(r=>r.anchor);
+  pxChart.update();
+}
+async function refreshTrades(){
+  const rows = await api('/api/trades?limit=25');
+  $('trades').querySelector('tbody').innerHTML = rows.map(r=>`<tr>
+    <td>${new Date(r.ts*1000).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}</td>
+    <td style="color:${r.side==='short'?'var(--bad)':'var(--ok)'}">${r.side==='short'?'空':'多'}</td>
+    <td>${fmt(r.entry_price)}</td><td>${fmt(r.exit_price)}</td>
+    <td>${fmt(r.qty,4)}</td>
+    <td class="${r.pnl_usdt>=0?'pos':'neg'}">${fmt(r.pnl_usdt,3)}</td></tr>`).join('')
+    || '<tr><td colspan="6" style="text-align:center;color:var(--muted)">还没有成交。机器人入场后这里会出现记录</td></tr>';
+}
+
+async function tick(){
+  try{ await Promise.all([refreshStatus(),refreshLadder(),refreshTrades()]); }
+  catch(e){ if(e.message!=='auth') $('conn').textContent='● 连接失败'; }
+}
+mkCharts();
+(async()=>{
+  if(!TOKEN){ showLogin(); return; }
+  try{ await api('/api/status'); $('login').style.display='none'; }
+  catch(e){ showLogin(); return; }
+  tick(); refreshCharts();
+})();
+setInterval(tick, 5000);
+setInterval(refreshCharts, 60000);
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+services:
+  grid-bot:
+    build: .                      # 本地构建, 不从镜像仓库拉
+    image: grid-bot-bot:local
+    container_name: grid-bot
+    restart: unless-stopped
+    ports:
+      - "8787:8787"               # 只读面板, 公网访问 http://服务器IP:8787
+    volumes:
+      # 配置文件读写挂载 (TG 菜单调参数需写回此文件持久化)
+      - ./config.local.yaml:/app/config.local.yaml
+      # 数据持久化: SQLite + 日志. 容器重建也不丢历史
+      - ./data:/app/data
+    # 时区, 让日志时间戳和你本地一致
+    environment:
+      - TZ=Asia/Shanghai

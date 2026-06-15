@@ -1,0 +1,10 @@
+.git
+.gitignore
+__pycache__
+*.pyc
+.venv
+data/
+config.local.yaml
+data_*.csv
+*.tar.gz
+README.md

@@ -1,0 +1,5 @@
+config.local.yaml
+data/
+__pycache__/
+*.pyc
+data_*.csv
