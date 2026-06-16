@@ -126,19 +126,28 @@ class TgBot:
 
     def _poll_loop(self):
         while not self._stop:
-            resp = self.api("getUpdates", offset=self.offset, timeout=30)
-            for u in resp.get("result", []):
-                self.offset = u["update_id"] + 1
-                if "message" in u:
-                    msg = u["message"]
-                    if str(msg.get("chat", {}).get("id")) != self.chat_id:
-                        continue
-                    self._handle_text(msg.get("text", "").strip())
-                elif "callback_query" in u:
-                    cq = u["callback_query"]
-                    if str(cq.get("message", {}).get("chat", {}).get("id")) != self.chat_id:
-                        continue
-                    self._handle_callback(cq)
+            try:
+                resp = self.api("getUpdates", offset=self.offset, timeout=30)
+                for u in resp.get("result", []):
+                    self.offset = u["update_id"] + 1
+                    try:
+                        if "message" in u:
+                            msg = u["message"]
+                            if str(msg.get("chat", {}).get("id")) != self.chat_id:
+                                continue
+                            self._handle_text(msg.get("text", "").strip())
+                        elif "callback_query" in u:
+                            cq = u["callback_query"]
+                            if str(cq.get("message", {}).get("chat", {}).get("id")) != self.chat_id:
+                                continue
+                            self._handle_callback(cq)
+                    except Exception as e:
+                        # 单条消息处理出错不能让整个TG线程崩溃
+                        log.warning(f"TG 消息处理出错: {e}")
+            except Exception as e:
+                log.warning(f"TG 轮询出错, 继续: {e}")
+                import time as _t
+                _t.sleep(3)
 
     def _handle_text(self, text):
         parts = text.split()
