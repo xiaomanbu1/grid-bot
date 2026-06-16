@@ -61,6 +61,11 @@ web:
   port: 8787
   token: "CHANGE_ME_LONG_RANDOM"   # openssl rand -hex 24 生成
 
+multisim:
+  # 多币模拟对比 (模拟盘, 不下单). 用 python main.py multisim 启动
+  symbols: ["BTC", "ETH", "SOL", "DOGE", "BNB", "XRP", "AVAX", "LINK"]
+  web_port: 8788                   # 对比面板端口 (实盘面板是8787, 错开)
+
 storage:
   db_path: "data/bot.db"
   log_path: "data/bot.log"

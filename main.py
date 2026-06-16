@@ -24,7 +24,7 @@ def setup_logging(cfg):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["live", "backtest"])
+    ap.add_argument("cmd", choices=["live", "backtest", "multisim"])
     ap.add_argument("--config", default="config.yaml")
     ap.add_argument("--days", type=int, default=180)
     ap.add_argument("--csv", default=None)
@@ -36,6 +36,9 @@ def main():
     if args.cmd == "live":
         from bot.live import LiveRunner
         LiveRunner(cfg, config_path=args.config).run()
+    elif args.cmd == "multisim":
+        from bot.multisim_run import MultiSimRunner
+        MultiSimRunner(cfg).run()
     else:
         from bot import backtest as bt
         candles = bt.load_csv(args.csv) if args.csv else bt.fetch_klines(cfg, args.days)

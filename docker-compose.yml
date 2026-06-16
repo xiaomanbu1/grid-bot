@@ -1,16 +1,30 @@
 services:
+  # 实盘容器 (跑一个币, 真实下单)
   grid-bot:
-    build: .                      # 本地构建, 不从镜像仓库拉
-    image: grid-bot-bot:local
+    build: .
+    image: grid-bot:local
     container_name: grid-bot
     restart: unless-stopped
+    command: ["python", "main.py", "live", "--config", "config.local.yaml"]
     ports:
-      - "8787:8787"               # 只读面板, 公网访问 http://服务器IP:8787
+      - "8787:8787"               # 实盘只读面板
     volumes:
-      # 配置文件读写挂载 (TG 菜单调参数需写回此文件持久化)
       - ./config.local.yaml:/app/config.local.yaml
-      # 数据持久化: SQLite + 日志. 容器重建也不丢历史
       - ./data:/app/data
-    # 时区, 让日志时间戳和你本地一致
+    environment:
+      - TZ=Asia/Shanghai
+
+  # 模拟对比容器 (并行跑多个币, 不下单, 帮你选币)
+  grid-multisim:
+    build: .
+    image: grid-bot:local
+    container_name: grid-multisim
+    restart: unless-stopped
+    command: ["python", "main.py", "multisim", "--config", "config.local.yaml"]
+    ports:
+      - "8788:8788"               # 多币对比面板
+    volumes:
+      - ./config.local.yaml:/app/config.local.yaml
+      - ./data-sim:/app/data      # 模拟盘数据单独目录, 不和实盘混
     environment:
       - TZ=Asia/Shanghai

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>多币模拟对比</title>
+<style>
+:root{--bg:#16181d;--panel:#1e2128;--line:#2c3038;--txt:#e8e6e1;--muted:#8b8f98;
+  --xmr:#f26822;--ok:#57c98f;--bad:#e5484d;--mono:ui-monospace,'SF Mono',Consolas,monospace;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);
+  font:14px/1.5 -apple-system,'PingFang SC','Noto Sans SC',sans-serif;
+  padding:20px;max-width:900px;margin:0 auto}
+h1{font-size:17px;margin-bottom:4px}h1 b{color:var(--xmr)}
+.sub{color:var(--muted);font-size:12px;margin-bottom:18px}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+table{width:100%;border-collapse:collapse;background:var(--panel);
+  border:1px solid var(--line);border-radius:10px;overflow:hidden}
+th{background:#23262d;color:var(--muted);font-weight:500;font-size:12px;
+  text-align:right;padding:11px 14px}
+th:first-child,td:first-child{text-align:left}
+td{text-align:right;padding:11px 14px;border-top:1px solid #23262d;font-family:var(--mono)}
+.rank1 td{background:rgba(242,104,34,.06)}
+.coin{font-weight:600;font-size:15px}
+.pos{color:var(--ok)}.neg{color:var(--bad)}
+.badge{display:inline-block;font-size:10px;padding:1px 7px;border-radius:3px;
+  background:#2a3a4a;color:#7db8e8;margin-left:6px}
+#login{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center}
+#login .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:28px;width:300px}
+#login input{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--txt);
+  padding:9px 12px;border-radius:6px;margin:12px 0;font-family:var(--mono)}
+#login button{width:100%;background:var(--xmr);border:none;color:#fff;font-weight:600;
+  padding:10px;border-radius:6px;cursor:pointer}
+.foot{color:var(--muted);font-size:12px;margin-top:16px;line-height:1.7}
+</style>
+</head>
+<body>
+<div id="login"><div class="card">
+  <h1 style="font-size:15px">多币模拟对比</h1>
+  <input id="tok" type="password" placeholder="访问令牌 (web.token)" onkeydown="if(event.key==='Enter')login()">
+  <button onclick="login()">进入</button>
+  <p id="err" style="color:var(--bad);font-size:12px;min-height:16px;margin-top:6px"></p>
+</div></div>
+
+<h1><b>多币</b>模拟对比 · 换币参考</h1>
+<div class="sub" id="sub">加载中…</div>
+<table>
+  <thead><tr>
+    <th>排名 / 币种</th><th>现价</th><th>日波动</th>
+    <th>完成轮次</th><th>虚拟盈亏</th><th>日均盈亏</th>
+  </tr></thead>
+  <tbody id="rows"></tbody>
+</table>
+<div class="foot">
+  这是<b>模拟盘</b>数据 — 同一套策略并行跑多个币, 不下真实单。<br>
+  <b>日均盈亏高 + 轮次多</b> = 该币当下震荡活跃、适合网格, 可考虑实盘换过去。<br>
+  轮次少 = 价格平淡没成交; 盈亏为负 = 可能在走单边趋势, 网格吃亏。
+</div>
+
+<script>
+let TOKEN = localStorage.getItem('msim_token')||'';
+const $=id=>document.getElementById(id);
+async function api(p){const r=await fetch(p,{headers:{'X-Auth-Token':TOKEN}});
+  if(r.status===401){$('login').style.display='flex';$('err').textContent='令牌无效';throw 0;}return r.json();}
+async function login(){TOKEN=$('tok').value.trim();try{await api('/api/compare');
+  localStorage.setItem('msim_token',TOKEN);$('login').style.display='none';tick();}
+  catch(e){$('err').textContent='令牌无效';}}
+function fmt(n){return n>=0?'+'+n.toFixed(2):n.toFixed(2);}
+async function tick(){
+  let rows;try{rows=await api('/api/compare');}catch(e){return;}
+  $('sub').textContent='更新于 '+new Date().toLocaleTimeString('zh-CN')+' · 共 '+rows.length+' 个币';
+  $('rows').innerHTML=rows.map((r,i)=>`<tr class="${i===0?'rank1':''}">
+    <td><span class="coin">${i+1}. ${r.symbol}</span>${i===0?'<span class="badge">最佳</span>':''}</td>
+    <td>${r.price}</td><td>${r.vol_pct}%</td>
+    <td>${r.round_trips}</td>
+    <td class="${r.realized_pnl>=0?'pos':'neg'}">${fmt(r.realized_pnl)}U</td>
+    <td class="${r.pnl_per_day>=0?'pos':'neg'}">${fmt(r.pnl_per_day)}U</td>
+  </tr>`).join('');
+}
+(async()=>{if(!TOKEN){$('login').style.display='flex';return;}
+  try{await api('/api/compare');$('login').style.display='none';tick();}
+  catch(e){}})();
+setInterval(tick,10000);
+</script>
+</body>
+</html>
