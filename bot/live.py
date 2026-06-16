@@ -351,6 +351,66 @@ class LiveRunner:
         elif dist < r.liq_distance_warn_pct:
             self.tg.send(f"⚠️ 强平距离仅 {dist*100:.1f}% (强平价 {pos['liq_price']:.2f})")
 
+    def _check_flash_crash(self):
+        """急跌快速止损: 单根K线涨跌幅超阈值 → 只通知, 不自动平仓."""
+        # 限流: 最多每60秒拉一次K线, 避免每轮都请求
+        now0 = time.time()
+        if now0 - getattr(self, "_last_flash_check", 0) < 60:
+            return
+        self._last_flash_check = now0
+        g = self.cfg.get("guard", {}) if hasattr(self.cfg, "get") else {}
+        thr = g.get("flash_move_pct", 0.15)
+        tf = g.get("flash_timeframe", "5m")
+        try:
+            candles = self.ex.ohlcv(tf, limit=2)
+            if len(candles) < 1:
+                return
+            o, c = candles[-1][1], candles[-1][4]
+            if o <= 0:
+                return
+            move = (c - o) / o
+            if abs(move) >= thr:
+                now = time.time()
+                # 同一次急跌5分钟内不重复报
+                if now - getattr(self, "_last_flash_alert", 0) > 300:
+                    self._last_flash_alert = now
+                    direction = "暴跌" if move < 0 else "暴涨"
+                    self.tg.send(
+                        f"⚡ 急{direction}预警: 最近一根{tf} K线{move*100:+.1f}% "
+                        f"(阈值±{thr*100:.0f}%)\n"
+                        f"现价 {c:.4f} | 网格可能在接刀子, 建议人工检查是否 /pause 或 /kill")
+        except Exception as e:
+            log.warning(f"急跌检测出错: {e}")
+
+    def _check_total_drawdown(self, price: float):
+        """总回撤保护: 账户净值从最高点回撤超阈值 → 只通知, 不自动操作."""
+        g = self.cfg.get("guard", {}) if hasattr(self.cfg, "get") else {}
+        thr = g.get("max_drawdown_pct", 0.20)
+        # 净值 = 已实现盈亏 + 当前浮动盈亏 (用持仓格子估算)
+        equity = self.engine.stats.realized_pnl_usdt
+        for l in self.engine.levels:
+            if l.state == LevelState.HOLDING:
+                if l.side == Side.SHORT:
+                    equity += (l.entry_price - price) * l.qty
+                else:
+                    equity += (price - l.entry_price) * l.qty
+        # 维护净值高水位
+        if not hasattr(self, "_equity_peak"):
+            self._equity_peak = equity
+        self._equity_peak = max(self._equity_peak, equity)
+        peak = self._equity_peak
+        # 回撤按相对峰值的绝对额 / 一个基准(用满仓名义做分母避免除0)
+        base = abs(peak) if abs(peak) > 1 else self.cfg.risk.max_net_position_usdt
+        dd = (peak - equity) / base if base > 0 else 0
+        if dd >= thr:
+            now = time.time()
+            if now - getattr(self, "_last_dd_alert", 0) > 3600:  # 每小时最多报一次
+                self._last_dd_alert = now
+                self.tg.send(
+                    f"📉 总回撤预警: 净值从峰值回撤 {dd*100:.1f}% (阈值{thr*100:.0f}%)\n"
+                    f"峰值 {peak:.2f}U → 当前 {equity:.2f}U\n"
+                    f"策略可能在持续亏损, 建议人工评估是否 /pause 或 /kill")
+
     def _recycle(self, price: float):
         usdt = self.engine.should_recycle(price)
         if usdt > 0:
@@ -432,6 +492,8 @@ class LiveRunner:
                     self._maintain_ladder(price)
                     self._check_breaker()
                     self._check_risk(price)
+                    self._check_flash_crash()
+                    self._check_total_drawdown(price)
                     self._recycle(price)
                 self._daily_housekeeping()
                 self.store.snapshot(price, self.engine.anchor,

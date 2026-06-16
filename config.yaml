@@ -25,6 +25,12 @@ grid:
   active_levels_per_side: 5        # 每侧同时挂单数
   leverage: 3                      # 杠杆, 别超5
 
+guard:
+  # 急跌快速止损 + 总回撤保护. 触发只通知TG, 不自动平仓(保留人工决策)
+  flash_move_pct: 0.15             # 单根K线涨跌超±15%→急跌预警
+  flash_timeframe: "5m"            # 监控的K线周期
+  max_drawdown_pct: 0.20           # 净值从峰值回撤超20%→回撤预警
+
 auto_tune:
   enabled: true                    # 每日0点自动重算波动率, 变化超30%自动调格距/范围
 
