@@ -67,13 +67,14 @@ class LiveRunner:
         s = self.engine.stats
         holding = sum(1 for l in self.engine.levels if l.state == LevelState.HOLDING)
         pos = self.ex.position_info()
-        return (f"📊 BTC 网格状态\n"
+        coin = self.cfg.exchange.perp_symbol.split("/")[0]
+        return (f"📊 {coin} 网格状态\n"
                 f"模式: {'DRY-RUN' if self.cfg.mode.dry_run else '实盘'}"
                 f"{' | ⏸暂停' if self.manual_pause else ''}"
                 f"{' | 🛑KILLED' if self.engine.killed else ''}\n"
-                f"现价: {price:.2f} | 锚点: {self.engine.anchor:.2f}\n"
+                f"现价: {price:.4f} | 锚点: {self.engine.anchor:.4f}\n"
                 f"持仓格子: {holding} | 净敞口: {self.engine.net_position_usdt(price):.1f}U\n"
-                f"强平价: {pos['liq_price']:.2f}\n"
+                f"强平价: {pos['liq_price']:.4f}\n"
                 f"资金费: {self.engine.funding_rate*100:.4f}%\n"
                 f"完成轮次: {s.grid_round_trips} | 实现盈亏: {s.realized_pnl_usdt:.2f}U")
 
@@ -83,12 +84,13 @@ class LiveRunner:
 
     def balance_text(self) -> str:
         b = self.ex.balances()
+        ex_name = self.cfg.exchange.id.capitalize()
         if b.get("dry"):
             return ("💵 当前 DRY-RUN 模拟模式, 无真实余额。\n"
-                    "切到实盘后这里显示 Gate 合约保证金和现货持仓。")
-        lines = ["💵 Gate 账户余额"]
-        if "fut_err" in b:
-            lines.append(f"  合约: 查询失败 ({b['fut_err']})")
+                    f"切到实盘后这里显示 {ex_name} 合约账户余额。")
+        lines = [f"💵 {ex_name} 账户余额"]
+        if "fut_err" in b or "err" in b:
+            lines.append(f"  合约: 查询失败 ({b.get('fut_err') or b.get('err')})")
         else:
             lines.append(f"  合约保证金 USDT: {b.get('fut_usdt_total',0):.2f} "
                          f"(可用 {b.get('fut_usdt_free',0):.2f} / "
@@ -477,7 +479,7 @@ class LiveRunner:
         self.engine.rebuild_grid(self._compute_anchor(), time.time())
         self.tg.start()
         start_web(self.cfg, self)
-        self.tg.send("🤖 BTC 网格机器人已启动\n" + self.status_text())
+        self.tg.send(f"🤖 {self.cfg.exchange.perp_symbol.split(chr(47))[0]} 网格机器人已启动\n" + self.status_text())
 
         funding_ts = 0
         while True:
