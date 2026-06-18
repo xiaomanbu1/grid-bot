@@ -80,14 +80,20 @@ class BinanceAdapter:
             oid = f"sim-{uuid.uuid4().hex[:8]}"
             self.sim_orders[oid] = {"side": side, "price": price, "qty": qty,
                                     "filled": False, "ts": time.time()}
-            log.info(f"[DRY] 挂单 {side} {qty}BTC@{price:.1f} reduce_only={reduce_only} id={oid}")
+            log.info(f"[DRY] 挂单 {side} {qty}{self.perp.split(chr(47))[0]}@{price:.4f} reduce_only={reduce_only} id={oid}")
             return oid
         amt = self.fmt_amount(qty)
-        params = {"timeInForce": "GTX"}  # GTX = post-only, 保证 maker
+        # 下单模式: maker(post-only,省手续费但排队慢) 或 taker(吃单,立刻成交但付费)
+        mode = self.cfg.exchange.get("order_mode", "maker") \
+            if hasattr(self.cfg.exchange, "get") else "maker"
+        if mode == "taker":
+            params = {"timeInForce": "GTC"}  # 普通限价, 价格到了可吃单成交
+        else:
+            params = {"timeInForce": "GTX"}  # post-only, 只做 maker
         if reduce_only:
             params["reduceOnly"] = True
         o = self.ex.create_order(self.perp, "limit", side, amt, price, params)
-        log.info(f"挂单 {side} {amt}BTC@{price:.1f} id={o['id']}")
+        log.info(f"挂单 {side} {amt}{self.perp.split(chr(47))[0]}@{price:.4f} [{mode}] id={o['id']}")
         return o["id"]
 
     def cancel(self, order_id):

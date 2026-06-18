@@ -198,6 +198,19 @@ class LiveRunner:
         rng = min(max(vol * 8, 0.08), 0.30)
         return {"vol": vol, "step_pct": round(step, 4), "range_pct": round(rng, 3)}
 
+    def set_order_mode(self, mode: str) -> str:
+        """切换下单模式 maker/taker, 写回配置. 影响之后挂的新单."""
+        if mode not in ("maker", "taker"):
+            return f"未知模式: {mode}"
+        self.cfg["exchange"]["order_mode"] = mode
+        self._persist_config()
+        log.warning(f"下单模式切换: {mode}")
+        if mode == "taker":
+            return ("⚡ 已切到 TAKER 吃单模式\n价格到位立刻成交, 不排队, 但付 taker 手续费\n"
+                    "(适合想快速成交、盘口厚成交慢时)")
+        return ("🐢 已切到 MAKER 挂单模式\npost-only 排队, 省手续费甚至有返佣, 但盘口厚时成交慢\n"
+                "(适合不急、想省手续费)")
+
     def switch_symbol(self, symbol: str, auto_param: bool = True) -> str:
         """切换交易对. 先撤所有挂单, 改配置, 可选自动调参, 重新锚定."""
         from .strategy import LevelState

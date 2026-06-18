@@ -82,7 +82,8 @@ class TgBot:
              {"text": "⚙️ 调参数", "callback_data": "params"}],
             [{"text": "🪙 切换币种", "callback_data": "symbol"},
              {"text": "🔀 切换模式", "callback_data": "mode"}],
-            [{"text": "🛑 KILL", "callback_data": "kill_confirm"}],
+            [{"text": "⚡ 下单方式", "callback_data": "ordermode"},
+             {"text": "🛑 KILL", "callback_data": "kill_confirm"}],
         ]
 
     # 常用币种快捷按钮 (币安主流币). 也可发文字 "/symbol DOGE" 切任意币
@@ -237,6 +238,18 @@ class TgBot:
             self._answer(cb_id, f"切换到 {sym}...")
             result = c.switch_symbol(sym, auto_param=True)
             self._edit(msg_id, result, self._main_menu())
+
+        elif data == "ordermode":
+            self._answer(cb_id)
+            cur = c.cfg["exchange"].get("order_mode", "maker") if hasattr(c.cfg["exchange"], "get") else "maker"
+            kb = [[{"text": ("✅ " if cur=="maker" else "")+"🐢 Maker (省费/慢)", "callback_data": "om:maker"}],
+                  [{"text": ("✅ " if cur=="taker" else "")+"⚡ Taker (付费/快)", "callback_data": "om:taker"}],
+                  [{"text": "« 返回", "callback_data": "menu"}]]
+            self._edit(msg_id, f"⚡ 下单方式 (当前: {cur})\n\nMaker: post-only排队, 省手续费, 盘口厚时成交慢\nTaker: 吃单, 立刻成交, 付手续费", kb)
+        elif data.startswith("om:"):
+            mode = data.split(":")[1]
+            self._answer(cb_id, f"切到{mode}")
+            self._edit(msg_id, c.set_order_mode(mode), self._main_menu())
 
         elif data == "kill_confirm":
             self._answer(cb_id)

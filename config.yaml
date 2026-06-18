@@ -10,6 +10,7 @@ exchange:
   api_key: "YOUR_API_KEY"
   api_secret: "YOUR_API_SECRET"
   perp_symbol: "BTC/USDT:USDT"     # 交易对. 可在TG菜单"切换币种"动态改, 或发 /symbol DOGE
+  order_mode: "maker"              # maker=post-only(省手续费但盘口厚时排队慢) / taker=吃单(立刻成交但付手续费)
 
 mode:
   dry_run: true                    # true=只模拟不下单, 先跑一周再切false
