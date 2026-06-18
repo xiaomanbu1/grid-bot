@@ -105,6 +105,35 @@ class BinanceAdapter:
         except Exception as e:
             log.warning(f"撤单失败 {order_id}: {e}")
 
+    def cancel_all(self) -> int:
+        """撤掉该交易对所有挂单. 紧急停止用, 直接问交易所, 不依赖本地记录. 返回撤单数."""
+        if self.dry:
+            n = len(self.sim_orders)
+            self.sim_orders.clear()
+            return n
+        try:
+            # 先查实际还挂着多少
+            open_orders = self.ex.fetch_open_orders(self.perp)
+            n = len(open_orders)
+            # 币安支持一次撤掉某交易对全部挂单
+            self.ex.cancel_all_orders(self.perp)
+            log.info(f"已撤掉 {self.perp} 全部 {n} 个挂单")
+            return n
+        except Exception as e:
+            log.warning(f"批量撤单失败, 尝试逐个撤: {e}")
+            # 兜底: 逐个撤
+            n = 0
+            try:
+                for o in self.ex.fetch_open_orders(self.perp):
+                    try:
+                        self.ex.cancel_order(o["id"], self.perp)
+                        n += 1
+                    except Exception:
+                        pass
+            except Exception as e2:
+                log.warning(f"兜底撤单也失败: {e2}")
+            return n
+
     def is_filled(self, order_id, last_price):
         if self.dry:
             o = self.sim_orders.get(order_id)

@@ -83,7 +83,8 @@ class TgBot:
             [{"text": "🪙 切换币种", "callback_data": "symbol"},
              {"text": "🔀 切换模式", "callback_data": "mode"}],
             [{"text": "⚡ 下单方式", "callback_data": "ordermode"},
-             {"text": "🛑 KILL", "callback_data": "kill_confirm"}],
+             {"text": "🧹 清空盈亏", "callback_data": "clearpnl"}],
+            [{"text": "🛑 KILL", "callback_data": "kill_confirm"}],
         ]
 
     # 常用币种快捷按钮 (币安主流币). 也可发文字 "/symbol DOGE" 切任意币
@@ -161,6 +162,8 @@ class TgBot:
             else:
                 self.send(self.ctrl.switch_symbol(parts[1], auto_param=True),
                           self._main_menu())
+        elif cmd == "/closeall":
+            self.send(self.ctrl.close_all_positions(), self._main_menu())
         elif cmd == "/status":
             self.send(self.ctrl.status_text())
         elif cmd == "/pnl":
@@ -257,8 +260,17 @@ class TgBot:
                   [{"text": "« 取消", "callback_data": "menu"}]]
             self._edit(msg_id, "确认紧急停止? 会撤所有挂单并停止策略.\n持仓不动, 需你手动处理.", kb)
         elif data == "kill_do":
-            c.kill(); self._answer(cb_id, "已KILL")
-            self._edit(msg_id, "🛑 已撤单停机. 持仓请手动处理.", self._main_menu())
+            self._answer(cb_id, "执行中...")
+            result = c.kill()
+            self._edit(msg_id, result, self._main_menu())
+        elif data == "clearpnl":
+            self._answer(cb_id)
+            kb = [[{"text": "🧹 确认清空盈亏数据", "callback_data": "clearpnl_do"}],
+                  [{"text": "« 取消", "callback_data": "menu"}]]
+            self._edit(msg_id, "确认清空盈亏统计? 完成轮次和实现盈亏会归零.\n(挂单和持仓不受影响)", kb)
+        elif data == "clearpnl_do":
+            self._answer(cb_id, "清空中...")
+            self._edit(msg_id, c.clear_pnl(), self._main_menu())
         else:
             self._answer(cb_id)
 

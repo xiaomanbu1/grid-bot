@@ -109,6 +109,31 @@ class GateAdapter:
         except Exception as e:
             log.warning(f"撤单失败 {order_id}: {e}")
 
+    def cancel_all(self) -> int:
+        """撤掉该交易对所有挂单. 紧急停止用. 返回撤单数."""
+        if self.dry:
+            n = len(self.sim_orders)
+            self.sim_orders.clear()
+            return n
+        try:
+            open_orders = self.ex.fetch_open_orders(self.perp)
+            n = len(open_orders)
+            self.ex.cancel_all_orders(self.perp)
+            log.info(f"已撤掉 {self.perp} 全部 {n} 个挂单")
+            return n
+        except Exception as e:
+            log.warning(f"批量撤单失败, 逐个撤: {e}")
+            n = 0
+            try:
+                for o in self.ex.fetch_open_orders(self.perp):
+                    try:
+                        self.ex.cancel_order(o["id"], self.perp); n += 1
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            return n
+
     def is_filled(self, order_id: str, last_price: float) -> bool:
         if self.dry:
             o = self.sim_orders.get(order_id)

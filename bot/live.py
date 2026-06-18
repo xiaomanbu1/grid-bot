@@ -103,9 +103,53 @@ class LiveRunner:
     def request_recenter(self):
         self.recenter_flag = True
 
-    def kill(self):
+    def kill(self) -> str:
+        """紧急停止: 撤掉所有挂单(直接问交易所) + 停止策略. 不平已有持仓."""
         self.engine.killed = True
-        self._cancel_all_entries()
+        n = self.ex.cancel_all()
+        # 清本地所有格子的挂单记录和状态
+        for l in self.engine.levels:
+            l.entry_order_id = None
+            l.exit_order_id = None
+            if l.state == LevelState.EMPTY:
+                l.qty = 0.0
+        log.warning(f"紧急停止: 已撤 {n} 个挂单, 策略已停")
+        held = sum(1 for l in self.engine.levels if l.state == LevelState.HOLDING)
+        msg = f"🛑 已紧急停止\n撤掉 {n} 个挂单, 策略已暂停"
+        if held > 0:
+            msg += f"\n⚠️ 仍持有 {held} 个仓位未平 (KILL不自动平仓)\n如需平仓请去交易所手动操作, 或用 /closeall"
+        return msg
+
+    def close_all_positions(self) -> str:
+        """市价平掉所有持仓格子. 谨慎用 — 会以市价成交、可能有滑点和浮亏。"""
+        closed = 0
+        for l in self.engine.levels:
+            if l.state == LevelState.HOLDING and l.qty > 0:
+                side = "long" if l.side == Side.LONG else "short"
+                try:
+                    self.ex.close_position_side(side, l.qty)
+                    l.state = LevelState.EMPTY
+                    l.qty = 0.0
+                    l.exit_order_id = None
+                    closed += 1
+                except Exception as e:
+                    log.warning(f"平仓失败: {e}")
+        log.warning(f"手动全平: 平掉 {closed} 个持仓")
+        return f"✅ 已市价平掉 {closed} 个持仓\n(以市价成交, 可能有滑点)"
+
+    def clear_pnl(self) -> str:
+        """清空盈亏统计数据 (数据库trades表 + 内存计数). 不影响挂单和持仓."""
+        try:
+            self.store.clear_trades()
+        except Exception as e:
+            log.warning(f"清空数据库失败: {e}")
+        self.engine.stats.realized_pnl_usdt = 0.0
+        self.engine.stats.realized_today_usdt = 0.0
+        self.engine.stats.grid_round_trips = 0
+        if hasattr(self, "_equity_peak"):
+            del self._equity_peak
+        log.warning("盈亏统计已清空")
+        return "🧹 盈亏数据已清空\n(完成轮次、实现盈亏归零; 挂单和持仓不受影响)"
 
     # ---------- 运行时参数调整 (写回 config.local.yaml 持久化) ----------
 

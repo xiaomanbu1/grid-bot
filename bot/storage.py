@@ -55,3 +55,10 @@ class Store:
             xmr, = c.execute(
                 "SELECT COALESCE(SUM(xmr),0) FROM recycles").fetchone()
         return {"round_trips": trips, "realized_pnl": pnl, "xmr_bought": xmr}
+
+    def clear_trades(self):
+        """清空成交和回购记录 (盈亏统计归零). 快照保留(画图用)."""
+        with self._lock:
+            self.db.execute("DELETE FROM trades")
+            self.db.execute("DELETE FROM recycles")
+            self.db.commit()
